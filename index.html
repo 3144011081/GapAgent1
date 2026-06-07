@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GapAgent — Research Gap Identification Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #0d0f14;
+    --surface:   #141720;
+    --surface2:  #1c2030;
+    --border:    #252a3a;
+    --accent:    #4fffb0;
+    --accent2:   #7c8fff;
+    --accent3:   #ff7c7c;
+    --text:      #e2e8f8;
+    --muted:     #6b7599;
+    --high:      #ff6b6b;
+    --med:       #ffd166;
+    --low:       #4fffb0;
+    --font-head: 'Playfair Display', serif;
+    --font-body: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text h1 {
+    font-family: var(--font-head);
+    font-size: 1.2rem;
+    color: var(--text);
+  }
+  .logo-text span {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.05em;
+  }
+  .header-status {
+    display: flex; gap: 8px; align-items: center;
+    font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted);
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent3); animation: pulse 2s infinite;
+  }
+  .status-dot.online { background: var(--accent); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr 300px;
+    flex: 1;
+    height: calc(100vh - 65px);
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+    padding: 20px 16px;
+    gap: 20px;
+  }
+  .sidebar-section h3 {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mode-btn {
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-align: left;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 0.2s;
+    margin-bottom: 6px;
+  }
+  .mode-btn:hover { background: var(--surface2); border-color: var(--accent2); }
+  .mode-btn.active {
+    background: rgba(79,255,176,0.08);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .mode-btn .icon { font-size: 1rem; width: 20px; text-align: center; }
+
+  .memory-count {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+    display: flex; justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .memory-count span { color: var(--accent); }
+
+  .clear-btn {
+    width: 100%; padding: 8px;
+    background: rgba(255,107,107,0.1);
+    border: 1px solid rgba(255,107,107,0.3);
+    border-radius: 6px;
+    color: var(--accent3);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .clear-btn:hover { background: rgba(255,107,107,0.2); }
+
+  /* ── MAIN CHAT AREA ── */
+  .main {
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  /* Welcome screen */
+  .welcome {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    flex: 1; text-align: center; gap: 16px;
+    padding: 40px;
+  }
+  .welcome-icon { font-size: 4rem; }
+  .welcome h2 {
+    font-family: var(--font-head);
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .welcome p { color: var(--muted); max-width: 440px; line-height: 1.7; }
+  .welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+  .chip {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    transition: all 0.2s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,255,176,0.05); }
+
+  /* Messages */
+  .msg { display: flex; gap: 12px; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  .msg.user { flex-direction: row-reverse; }
+
+  .msg-avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0;
+    font-weight: bold;
+  }
+  .msg.user .msg-avatar { background: linear-gradient(135deg,var(--accent2),#4a56e2); }
+  .msg.agent .msg-avatar { background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #000; }
+
+  .msg-bubble {
+    max-width: 72%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    line-height: 1.65;
+    font-size: 0.85rem;
+  }
+  .msg.user .msg-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-top-right-radius: 2px;
+  }
+  .msg.agent .msg-bubble {
+    background: rgba(79,255,176,0.06);
+    border: 1px solid rgba(79,255,176,0.15);
+    border-top-left-radius: 2px;
+  }
+
+  /* Result cards */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    animation: fadeUp 0.3s ease;
+    width: 100%;
+  }
+  .result-card-header {
+    padding: 14px 18px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .result-card-header h4 {
+    font-family: var(--font-head);
+    font-size: 0.95rem;
+    color: var(--accent);
+    font-style: italic;
+  }
+  .result-card-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 0.63rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .section-text {
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .gaps-grid { display: flex; flex-direction: column; gap: 8px; }
+  .gap-item {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid var(--border);
+    background: var(--surface2);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+  .gap-item.High { border-left-color: var(--high); }
+  .gap-item.Medium { border-left-color: var(--med); }
+  .gap-item.Low { border-left-color: var(--low); }
+  .gap-priority {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .gap-item.High .gap-priority { color: var(--high); }
+  .gap-item.Medium .gap-priority { color: var(--med); }
+  .gap-item.Low .gap-priority { color: var(--low); }
+  .gap-evidence { color: var(--muted); font-size: 0.75rem; margin-top: 4px; font-style: italic; }
+
+  /* Loading */
+  .typing {
+    display: flex; gap: 5px; align-items: center;
+    padding: 12px 16px;
+  }
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(0.6);opacity:.4} 40%{transform:scale(1);opacity:1} }
+
+  /* ── INPUT BAR ── */
+  .input-bar {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; gap: 10px; align-items: flex-end;
+  }
+  .input-wrap { flex: 1; position: relative; }
+  .input-bar textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    resize: none;
+    max-height: 140px;
+    min-height: 44px;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-bar textarea:focus { border-color: var(--accent2); }
+  .input-bar textarea::placeholder { color: var(--muted); }
+
+  .send-btn {
+    padding: 11px 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 10px;
+    color: #0d0f14;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .send-btn:hover { opacity: 0.88; }
+  .send-btn:active { transform: scale(0.97); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .upload-btn {
+    padding: 11px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: all 0.2s;
+  }
+  .upload-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  #pdf-input { display: none; }
+
+  /* ── RIGHT PANEL ── */
+  .right-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .panel-section h3 {
+    font-family: var(--font-mono);
+    font-size: 0.63rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-section h3 .count {
+    background: var(--surface2);
+    padding: 1px 7px;
+    border-radius: 10px;
+    color: var(--accent);
+    font-size: 0.65rem;
+  }
+
+  .gap-mini {
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border-left: 2px solid var(--border);
+    font-size: 0.75rem;
+    margin-bottom: 6px;
+    line-height: 1.5;
+  }
+  .gap-mini.High { border-left-color: var(--high); }
+  .gap-mini.Medium { border-left-color: var(--med); }
+  .gap-mini.Low { border-left-color: var(--low); }
+
+  .report-btn {
+    width: 100%; padding: 10px;
+    background: rgba(124,143,255,0.1);
+    border: 1px solid rgba(124,143,255,0.4);
+    border-radius: 8px;
+    color: var(--accent2);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .report-btn:hover { background: rgba(124,143,255,0.2); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-style: italic;
+    padding: 20px 0;
+  }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    display: none;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: min(700px,90vw);
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .modal h2 {
+    font-family: var(--font-head);
+    color: var(--accent);
+    margin-bottom: 16px;
+    font-style: italic;
+  }
+  .modal pre {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    color: var(--text);
+  }
+  .modal-close {
+    float: right;
+    background: none; border: none;
+    color: var(--muted); font-size: 1.4rem;
+    cursor: pointer; line-height: 1;
+    transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--accent3); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🔬</div>
+    <div class="logo-text">
+      <h1>GapAgent</h1>
+      <span>Research Gap Identification Assistant</span>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Checking Ollama...</span>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <h3>Input Mode</h3>
+      <button class="mode-btn active" data-mode="chat" onclick="setMode('chat')">
+        <span class="icon">💬</span> Chat / Ask
+      </button>
+      <button class="mode-btn" data-mode="text" onclick="setMode('text')">
+        <span class="icon">📝</span> Paste Abstract
+      </button>
+      <button class="mode-btn" data-mode="pdf" onclick="setMode('pdf')">
+        <span class="icon">📄</span> Upload PDF
+      </button>
+      <button class="mode-btn" data-mode="topic" onclick="setMode('topic')">
+        <span class="icon">🔍</span> Search Topic
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Memory</h3>
+      <div class="memory-count">Papers <span id="mem-papers">0</span></div>
+      <div class="memory-count">Evidence <span id="mem-evidence">0</span></div>
+      <div class="memory-count">Gaps <span id="mem-gaps">0</span></div>
+      <button class="clear-btn" onclick="clearMemory()">🗑 Clear Memory</button>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>About</h3>
+      <p style="font-size:0.72rem;color:var(--muted);line-height:1.7">
+        GapAgent uses a local Ollama LLM to analyze research papers, extract limitations, and identify unexplored research opportunities.<br><br>
+        <strong style="color:var(--text)">By:</strong><br>
+        Onaiza Maryam (23-SE-87)<br>
+        Iqra Rani (23-SE-60)<br><br>
+        <strong style="color:var(--text)">Course:</strong> Artificial Intelligence<br>
+        Dr. Kanwal Yousaf
+      </p>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="chat-area" id="chat-area">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">🔬</div>
+        <h2>GapAgent</h2>
+        <p>Analyze research papers, identify gaps, and discover future research directions — powered by a local AI model.</p>
+        <div class="welcome-chips">
+          <div class="chip" onclick="quickPrompt('What is a research gap and why is it important?')">What is a research gap?</div>
+          <div class="chip" onclick="quickPrompt('How do I identify gaps in machine learning research?')">ML research gaps</div>
+          <div class="chip" onclick="quickPrompt('What are common limitations in NLP research papers?')">NLP limitations</div>
+          <div class="chip" onclick="setMode('topic')">🔍 Search a topic</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <input type="file" id="pdf-input" accept=".pdf" onchange="handlePdfUpload(event)"/>
+      <button class="upload-btn" id="upload-btn-icon" title="Upload PDF" onclick="document.getElementById('pdf-input').click()" style="display:none">📎</button>
+      <div class="input-wrap">
+        <textarea id="msg-input" rows="1" placeholder="Ask GapAgent a question..." 
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="send-btn" id="send-btn" onclick="handleSend()">SEND →</button>
+    </div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="right-panel">
+    <div class="panel-section">
+      <h3>Identified Gaps <span class="count" id="gap-count">0</span></h3>
+      <div id="gaps-panel">
+        <div class="empty-state">Analyze a paper to see gaps here</div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Actions</h3>
+      <button class="report-btn" onclick="generateReport()">📋 Generate Full Report</button>
+    </div>
+  </aside>
+</div>
+
+<!-- Report Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <h2>Research Gap Report</h2>
+    <pre id="modal-content"></pre>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let currentMode = 'chat';
+let allGaps = [];
+
+// ── INIT ──────────────────────────────────────
+async function checkStatus() {
+  try {
+    const r = await fetch(`${API}/ping`);
+    if (r.ok) {
+      document.getElementById('status-dot').className = 'status-dot online';
+      document.getElementById('status-text').textContent = 'GapAgent Online';
+    }
+  } catch {
+    document.getElementById('status-dot').className = 'status-dot';
+    document.getElementById('status-text').textContent = 'Backend Offline';
+  }
+}
+checkStatus();
+
+// ── MODE ─────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  const inp = document.getElementById('msg-input');
+  const uploadIcon = document.getElementById('upload-btn-icon');
+  const placeholders = {
+    chat:  'Ask GapAgent a question...',
+    text:  'Paste your abstract or research text here...',
+    pdf:   'Click the 📎 button to upload a PDF, then click SEND',
+    topic: 'Enter a research topic (e.g. "federated learning privacy")...',
+  };
+  inp.placeholder = placeholders[mode] || '';
+  uploadIcon.style.display = mode === 'pdf' ? 'flex' : 'none';
+}
+
+// ── SEND ──────────────────────────────────────
+async function handleSend() {
+  const inp = document.getElementById('msg-input');
+  const text = inp.value.trim();
+  if (!text && currentMode !== 'pdf') return;
+
+  hideWelcome();
+  inp.value = ''; autoResize(inp);
+  document.getElementById('send-btn').disabled = true;
+
+  if (currentMode === 'chat') {
+    addMsg('user', text);
+    const loader = addTyping();
+    const data = await postJSON(`${API}/chat`, {message: text});
+    removeLoader(loader);
+    addMsg('agent', data.reply || data.error);
+  }
+  else if (currentMode === 'text') {
+    addMsg('user', `📝 Analyzing text (${text.length} chars)...`);
+    const loader = addTyping();
+    const data = await postJSON(`${API}/analyze/text`, {text, title:'Pasted Text'});
+    removeLoader(loader);
+    renderResult(data);
+    updateMemory();
+  }
+  else if (currentMode === 'topic') {
+    addMsg('user', `🔍 Searching topic: "${text}"`);
+    const loader = addTyping();
+    const data = await postJSON(`${API}/analyze/topic`, {topic: text});
+    removeLoader(loader);
+    renderResult(data);
+    updateMemory();
+  }
+  else if (currentMode === 'pdf') {
+    addMsg('agent', 'Please use the 📎 button to select a PDF file, then it will be analyzed automatically.');
+  }
+
+  document.getElementById('send-btn').disabled = false;
+}
+
+async function handlePdfUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  hideWelcome();
+  addMsg('user', `📄 Uploading: ${file.name}`);
+  const loader = addTyping();
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const r = await fetch(`${API}/analyze/pdf`, {method:'POST', body: formData});
+    const data = await r.json();
+    removeLoader(loader);
+    renderResult(data);
+    updateMemory();
+  } catch (e) {
+    removeLoader(loader);
+    addMsg('agent', `Error uploading PDF: ${e.message}`);
+  }
+  event.target.value = '';
+}
+
+// ── RENDER ────────────────────────────────────
+function renderResult(data) {
+  if (data.error) { addMsg('agent', `❌ Error: ${data.error}`); return; }
+
+  const gaps = data.gaps || [];
+  allGaps.push(...gaps);
+  updateGapsPanel();
+
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.innerHTML = `
+    <div class="result-card-header">
+      <h4>${data.title || 'Analysis Result'}</h4>
+      <span style="font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">${gaps.length} gap${gaps.length!==1?'s':''} found</span>
+    </div>
+    <div class="result-card-body">
+      <div>
+        <div class="section-label">Summary</div>
+        <div class="section-text">${data.summary || '—'}</div>
+      </div>
+      <div>
+        <div class="section-label">Limitations</div>
+        <div class="section-text">${data.limitations || '—'}</div>
+      </div>
+      <div>
+        <div class="section-label">Research Gaps</div>
+        <div class="gaps-grid">
+          ${gaps.map(g => `
+            <div class="gap-item ${g.priority}">
+              <div class="gap-priority">${g.priority} Priority</div>
+              <div>${g.gap}</div>
+              ${g.evidence ? `<div class="gap-evidence">Evidence: ${g.evidence}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Future Research Directions</div>
+        <div class="section-text">${data.future || '—'}</div>
+      </div>
+      ${data.sources && data.sources.length ? `
+      <div>
+        <div class="section-label">Sources Found</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${data.sources.map(s => `<a href="${s.url}" target="_blank" style="color:var(--accent2);font-size:0.75rem;text-decoration:none;font-family:var(--font-mono)">↗ ${s.title.substring(0,80)}</a>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+
+  const area = document.getElementById('chat-area');
+  area.appendChild(card);
+  area.scrollTop = area.scrollHeight;
+}
+
+function updateGapsPanel() {
+  const panel = document.getElementById('gaps-panel');
+  document.getElementById('gap-count').textContent = allGaps.length;
+  if (!allGaps.length) {
+    panel.innerHTML = '<div class="empty-state">Analyze a paper to see gaps here</div>';
+    return;
+  }
+  panel.innerHTML = allGaps.slice(-10).reverse().map(g => `
+    <div class="gap-mini ${g.priority}">
+      <div style="font-family:var(--font-mono);font-size:0.6rem;color:var(--${g.priority==='High'?'high':g.priority==='Medium'?'med':'low'});margin-bottom:3px">${g.priority}</div>
+      ${g.gap}
+    </div>
+  `).join('');
+}
+
+async function updateMemory() {
+  try {
+    const r = await fetch(`${API}/memory`);
+    const m = await r.json();
+    document.getElementById('mem-papers').textContent   = m.literature.length;
+    document.getElementById('mem-evidence').textContent = m.evidence.length;
+    document.getElementById('mem-gaps').textContent     = m.gaps.length;
+  } catch {}
+}
+
+async function clearMemory() {
+  await fetch(`${API}/memory/clear`, {method:'POST'});
+  allGaps = [];
+  updateGapsPanel();
+  updateMemory();
+  addMsg('agent', '🗑 Memory cleared. Ready for a fresh analysis.');
+}
+
+async function generateReport() {
+  try {
+    addMsg('agent', '📋 Generating comprehensive report...');
+    const loader = addTyping();
+    const r = await fetch(`${API}/report`);
+    const data = await r.json();
+    removeLoader(loader);
+    if (data.error) { addMsg('agent', `❌ ${data.error}`); return; }
+    document.getElementById('modal-content').textContent = data.report;
+    document.getElementById('modal').classList.add('open');
+  } catch(e) {
+    addMsg('agent', `Error: ${e.message}`);
+  }
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+// ── HELPERS ───────────────────────────────────
+function addMsg(role, text) {
+  hideWelcome();
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+    <div class="msg-bubble">${text}</div>
+  `;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const area = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'msg agent';
+  div.innerHTML = `
+    <div class="msg-avatar">🤖</div>
+    <div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>
+  `;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  return div;
+}
+
+function removeLoader(el) { el?.remove(); }
+
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function quickPrompt(text) {
+  document.getElementById('msg-input').value = text;
+  setMode('chat');
+  handleSend();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+async function postJSON(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch(e) {
+    return {error: e.message};
+  }
+}
+
+// Periodic memory sync
+setInterval(updateMemory, 5000);
+</script>
+</body>
+</html>

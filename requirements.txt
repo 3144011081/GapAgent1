@@ -1,0 +1,7 @@
+flask
+flask-cors
+requests
+PyPDF2
+feedparser
+chromadb
+sentence-transformers
